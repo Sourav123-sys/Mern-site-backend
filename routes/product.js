@@ -9,6 +9,7 @@ const {
     remove,
     update,
     list,
+    listSearch,
     listRelated,
     listCategories,
     listBySearch,
@@ -26,7 +27,7 @@ router.delete('/product/:productId:userId',requireSignin,remove)
 
 router.post("/products/by/search", listBySearch);
 
-
+router.get("/products/search", listSearch);
 router.put('/product/:productId:userId',requireSignin,update)
 //requireSignin,isAuth,isAdmin o use kora jabe
 

@@ -10,7 +10,11 @@ const {errorHandler} = require('../helpers/dbErrorHandler')
 
 exports.productById = (req,res,next,id) => {
 
-Product.findById(id).exec((err,product)=>{
+Product.findById(id)
+
+
+
+.exec((err,product)=>{
 if(err||!product) {
     return res.status(400).json({
         error: "product not found"
@@ -102,62 +106,98 @@ exports.remove= (req,res) => {
     })
 }
 
+exports.update = (req, res) => {
+    let form = new formidable.IncomingForm();
+    form.keepExtensions = true;
+    form.parse(req, (err, fields, files) => {
+        if (err) {
+            return res.status(400).json({
+                error: 'Image could not be uploaded'
+            });
+        }
 
-exports.update = (req,res) =>{
+        let product = req.product;
+        product = _.extend(product, fields);
 
+        // 1kb = 1000
+        // 1mb = 1000000
 
-    let form = new formidable.IncomingForm()
-    form.keepExtensions= true
-    form.parse(req,(err,fields,files)=>{
-   
-      if(err){
-          return res.status(400).json({
-              error: "image couldn't uploaded"
-          })
-      }
-   
-   // check for all fields
-   
-   const{name,description,price,category,quantity,shipping} = fields
-   
-   
-   if(!name|| !description|| !price|| !category|| !quantity|| !shipping){
-   
-       return res.status(400).json({
-           error: "All fields are required"
-       })
-   }
-   
-   
-   
-         let product = req.product
-         product =_.extend(product,fields)
-         if(files.photo){
-   
-          // console.log("FILES PHOTO:",files.photo)
-          if(files.photo>1000000){
-           return res.status(400).json({
-               error: "image should be less than 1mb in size"
-           })
-          }
-            product.photo.data = fs.readFileSync(files.photo.path)
-            product.photo.contentType =files.photo.type
-         }
-       
-         product.save((err,result)=>{
-   
-            if(err) {
+        if (files.photo) {
+            // console.log("FILES PHOTO: ", files.photo);
+            if (files.photo.size > 1000000) {
+                return res.status(400).json({
+                    error: 'Image should be less than 1mb in size'
+                });
+            }
+            product.photo.data = fs.readFileSync(files.photo.path);
+            product.photo.contentType = files.photo.type;
+        }
+
+        product.save((err, result) => {
+            if (err) {
                 return res.status(400).json({
                     error: errorHandler(err)
-                })
+                });
             }
-              res.json(result);
-         })
-       
-       
-       })
+            res.json(result);
+        });
+    });
+};
+// exports.update = (req,res) =>{
+
+
+//     let form = new formidable.IncomingForm()
+//     form.keepExtensions= true
+//     form.parse(req,(err,fields,files)=>{
    
-   }
+//       if(err){
+//           return res.status(400).json({
+//               error: "image couldn't uploaded"
+//           })
+//       }
+   
+//    // check for all fields
+   
+//    const{name,description,price,category,quantity,shipping} = fields
+   
+   
+//    if(!name|| !description|| !price|| !category|| !quantity|| !shipping){
+   
+//        return res.status(400).json({
+//            error: "All fields are required"
+//        })
+//    }
+   
+   
+   
+//          let product = req.product
+//          product =_.extend(product,fields)
+//          if(files.photo){
+   
+//           // console.log("FILES PHOTO:",files.photo)
+//           if(files.photo>1000000){
+//            return res.status(400).json({
+//                error: "image should be less than 1mb in size"
+//            })
+//           }
+//             product.photo.data = fs.readFileSync(files.photo.path)
+//             product.photo.contentType =files.photo.type
+//          }
+       
+//          product.save((err,result)=>{
+   
+//             if(err) {
+//                 return res.status(400).json({
+//                     error: errorHandler(err)
+//                 })
+//             }
+//               res.json(result);
+//          })
+       
+       
+//        })
+   
+//    }
 
    //sell/arrival
    //by sell = /products?sortBy = sold&order=desc&limit=4
@@ -211,7 +251,7 @@ exports.update = (req,res) =>{
 
     Product.find({_id:{$ne:req.product},category:req.product.category})
     .limit(limit)
-    .populate('category','_id name')
+    //.populate('category','_id name')
     .exec((err,products) => {
         if(err){
             return res.status(400).json({
@@ -302,3 +342,55 @@ exports.photo = (req, res, next) => {
     next();
 };
 
+exports.listSearch = (req, res) => {
+    //create query object to hold search value and category
+    const query = {}
+    //assign search value to query.name
+    if(req.query.search){
+        query.name = {$regex: req.query.search , $options: 'i'}
+        //assign category value to query.category
+        if(req.query.category && req.query.category !='All'){
+            query.category = req.query.category
+        }
+        // find the product based on query object with 2 properties
+        //search and category
+        Product.find(query,(err,products)=>{
+            if(err){
+                return res.status(400).json({
+                    error: errorHandler(err)
+                })
+            }
+            res.json(products)
+        }).select('-photo')
+    }
+}
+
+exports.deCreaseQuantity = (req, res,next) => {
+
+
+let bulkOps =  req.body.order.products.map((item)=>{
+
+
+return{
+    updateOne:{
+        filter:{_id: item._id},
+        update:{$inc: {quantity: -item.count, sold: +item.count}}
+    }
+
+}
+
+
+})
+
+Product.bulkWrite(bulkOps,{},(error,products)=>{
+    if(error){
+        return res.status(400).json({
+            error: 'Could not update product'
+        })
+    } 
+    next();
+})
+
+
+
+}
